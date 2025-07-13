@@ -111,11 +111,12 @@ const SimpleSwap = () => {
   };
 
   const slides = [
-    { title: 'Add Liquidity', content: /* ... */ },
-    { title: 'Remove Liquidity', content: /* ... */ },
-    { title: 'Swap Tokens', content: /* ... */ },
-    { title: 'Get Price', content: /* ... */ },
-  ]; // Como lo tenías
+  { title: 'Add Liquidity', content: <p>Add Liquidity content</p> },
+  { title: 'Remove Liquidity', content: <p>Remove Liquidity content</p> },
+  { title: 'Swap Tokens', content: <p>Swap Tokens content</p> },
+  { title: 'Get Price', content: <p>Get Price content</p> },
+];
+// Como lo tenías
 
   return (
     <div className="max-w-md mx-auto p-4">
