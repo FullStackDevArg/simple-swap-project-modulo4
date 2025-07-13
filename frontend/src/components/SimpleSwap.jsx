@@ -9,7 +9,7 @@ function SimpleSwap() {
   const [amountB, setAmountB] = useState('');
 
   // Configuración del contrato (reemplaza con las direcciones reales después de desplegar)
-  const contractAddress = '0x640b356e7209b619cd0ce962f13f7c9b9cf6256b'; // Actualizar después de desplegar
+  const contractAddress = '0x640B356E7209B619Cd0CE962F13f7c9b9CF6256B'; // Actualizar después de desplegar
   const tokenA = '0x03c4dac47eec187c5dc2b333c0743c6ef8a84afa'; // Actualizar después de desplegar
   const tokenB = '0x1e44dfac24406060acb91b6650768bfb577f7bd2'; // Actualizar después de desplegar
   const abi = [
