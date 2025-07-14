@@ -1,162 +1,149 @@
-import { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { ethers } from 'ethers';
+import abi from '../abi/SimpleSwapABI.json'; // Asegurate de tener este ABI exportado correctamente
+import './SimpleSwap.css';
 
-const SimpleSwap = () => {
-  const [account, setAccount] = useState(null);
+const contractAddress = 'TU_DIRECCION_CONTRATO'; // Reemplazá con tu dirección real del contrato
+const tokenA = 'DIRECCION_TOKEN_A'; // Reemplazá con la dirección real de tokenA
+const tokenB = 'DIRECCION_TOKEN_B'; // Reemplazá con la dirección real de tokenB
+
+const SimpleSwap = ({ account }) => {
   const [amountA, setAmountA] = useState('');
   const [amountB, setAmountB] = useState('');
-  const [currentSlide, setCurrentSlide] = useState(0);
-  const contractAddress = '0x371992a4D1BaC196b85D1C45A2C77CA15e399eE6'; // Actualiza si cambia
-  const tokenA = '0x03c4dac47eec187c5dc2b333c0743c6ef8a84afa';
-  const tokenB = '0x1e44dfac24406060acb91b6650768bfb577f7bd2';
-  const abi = [/* Tu ABI aquí, como lo compartiste */]; // Asegúrate de que sea el ABI completo
+  const [liquidity, setLiquidity] = useState('');
+  const [selectedSlide, setSelectedSlide] = useState(0);
 
-  useEffect(() => {
-    const connect = async () => {
-      if (window.ethereum) {
-        try {
-          const accounts = await window.ethereum.request({ method: 'eth_requestAccounts' });
-          setAccount(accounts[0]);
-        } catch (error) {
-          console.error("Error connecting wallet:", error);
-        }
-      }
-    };
-    connect();
-  }, []);
-
-  const connectWallet = async () => {
-    if (!account && window.ethereum) {
-      try {
-        const accounts = await window.ethereum.request({ method: 'eth_requestAccounts' });
-        setAccount(accounts[0]);
-      } catch (error) {
-        console.error("Error connecting wallet:", error);
-      }
-    }
-  };
+  const provider = new ethers.BrowserProvider(window.ethereum);
+  const signer = await provider.getSigner();
+  const contract = new ethers.Contract(contractAddress, abi, signer);
 
   const addLiquidity = async () => {
-    if (!account) return alert('Please connect your wallet');
     try {
-      const provider = new ethers.BrowserProvider(window.ethereum);
-      const signer = await provider.getSigner();
-      const contract = new ethers.Contract(contractAddress, abi, signer);
-      const deadline = Math.floor(Date.now() / 1000) + 600;
       const tx = await contract.addLiquidity(
-        tokenA, tokenB, ethers.parseEther(amountA || '0'), ethers.parseEther(amountB || '0'),
-        ethers.parseEther((parseFloat(amountA || '0') * 0.9).toString()), ethers.parseEther((parseFloat(amountB || '0') * 0.9).toString()),
-        account, deadline
+        tokenA,
+        tokenB,
+        ethers.parseUnits(amountA, 18),
+        ethers.parseUnits(amountB, 18),
+        1,
+        1,
+        account,
+        Math.floor(Date.now() / 1000) + 60
       );
       await tx.wait();
       alert('Liquidity added!');
     } catch (error) {
-      console.error("Error adding liquidity:", error);
-      alert('Error adding liquidity');
+      console.error(error);
+      alert('Add liquidity failed');
     }
   };
 
-  // Similarmente, agrega try-catch a removeLiquidity, swapTokens, y getPrice
   const removeLiquidity = async () => {
-    if (!account) return alert('Please connect your wallet');
     try {
-      const provider = new ethers.BrowserProvider(window.ethereum);
-      const signer = await provider.getSigner();
-      const contract = new ethers.Contract(contractAddress, abi, signer);
-      const deadline = Math.floor(Date.now() / 1000) + 600;
       const tx = await contract.removeLiquidity(
-        tokenA, tokenB, ethers.parseEther(amountA || '0'),
-        ethers.parseEther((parseFloat(amountA || '0') * 0.9).toString()), ethers.parseEther('0'),
-        account, deadline
+        tokenA,
+        tokenB,
+        ethers.parseUnits(liquidity, 18),
+        1,
+        1,
+        account,
+        Math.floor(Date.now() / 1000) + 60
       );
       await tx.wait();
       alert('Liquidity removed!');
     } catch (error) {
-      console.error("Error removing liquidity:", error);
-      alert('Error removing liquidity');
+      console.error(error);
+      alert('Remove liquidity failed');
     }
   };
 
   const swapTokens = async () => {
-    if (!account) return alert('Please connect your wallet');
     try {
-      const provider = new ethers.BrowserProvider(window.ethereum);
-      const signer = await provider.getSigner();
-      const contract = new ethers.Contract(contractAddress, abi, signer);
-      const path = [tokenA, tokenB];
-      const deadline = Math.floor(Date.now() / 1000) + 600;
       const tx = await contract.swapExactTokensForTokens(
-        ethers.parseEther(amountA || '0'), ethers.parseEther((parseFloat(amountA || '0') * 0.9).toString()),
-        path, account, deadline
+        ethers.parseUnits(amountA, 18),
+        1,
+        [tokenA, tokenB],
+        account,
+        Math.floor(Date.now() / 1000) + 60
       );
       await tx.wait();
-      alert('Tokens swapped!');
+      alert('Swap successful!');
     } catch (error) {
-      console.error("Error swapping tokens:", error);
-      alert('Error swapping tokens');
+      console.error(error);
+      alert('Swap failed');
     }
   };
 
   const getPrice = async () => {
-    if (!account) return alert('Please connect your wallet');
     try {
-      const provider = new ethers.BrowserProvider(window.ethereum);
-      const contract = new ethers.Contract(contractAddress, abi, provider);
       const price = await contract.getPrice(tokenA, tokenB);
       alert(`Price: ${ethers.formatEther(price)}`);
     } catch (error) {
-      console.error("Error getting price:", error);
+      console.error(error);
       alert('Error getting price');
     }
   };
 
   const slides = [
-  { title: 'Add Liquidity', content: <p>Add Liquidity content</p> },
-  { title: 'Remove Liquidity', content: <p>Remove Liquidity content</p> },
-  { title: 'Swap Tokens', content: <p>Swap Tokens content</p> },
-  { title: 'Get Price', content: <p>Get Price content</p> },
-];
-// Como lo tenías
+    {
+      title: 'Add Liquidity',
+      content: (
+        <>
+          <input
+            placeholder="Amount A"
+            value={amountA}
+            onChange={(e) => setAmountA(e.target.value)}
+          />
+          <input
+            placeholder="Amount B"
+            value={amountB}
+            onChange={(e) => setAmountB(e.target.value)}
+          />
+          <button onClick={addLiquidity}>Add</button>
+        </>
+      ),
+    },
+    {
+      title: 'Remove Liquidity',
+      content: (
+        <>
+          <input
+            placeholder="Liquidity Amount"
+            value={liquidity}
+            onChange={(e) => setLiquidity(e.target.value)}
+          />
+          <button onClick={removeLiquidity}>Remove</button>
+        </>
+      ),
+    },
+    {
+      title: 'Swap Tokens',
+      content: (
+        <>
+          <input
+            placeholder="Amount A"
+            value={amountA}
+            onChange={(e) => setAmountA(e.target.value)}
+          />
+          <button onClick={swapTokens}>Swap</button>
+        </>
+      ),
+    },
+    {
+      title: 'Get Price',
+      content: <button onClick={getPrice}>Fetch Price</button>,
+    },
+  ];
 
   return (
-    <div className="max-w-md mx-auto p-4">
-      {!account && (
-        <button onClick={connectWallet} className="bg-blue-500 text-white p-2 rounded mb-4">
-          Connect Wallet
-        </button>
-      )}
-      {account && (
-        <div>
-          <h1 className="text-2xl mb-4">SimpleSwap - Connected: {account}</h1>
-          <div className="relative">
-            <div className="overflow-hidden">
-              <div
-                className="flex transition-transform duration-300"
-                style={{ transform: `translateX(-${currentSlide * 100}%)` }}
-              >
-                {slides.map((slide, index) => (
-                  <div key={index} className="w-full flex-shrink-0 p-4">
-                    <h2 className="text-xl mb-2">{slide.title}</h2>
-                    {slide.content}
-                  </div>
-                ))}
-              </div>
-            </div>
-            <button
-              onClick={() => setCurrentSlide((prev) => (prev > 0 ? prev - 1 : slides.length - 1))}
-              className="absolute left-0 top-1/2 transform -translate-y-1/2 bg-gray-500 text-white p-2 rounded"
-            >
-              ←
-            </button>
-            <button
-              onClick={() => setCurrentSlide((prev) => (prev + 1) % slides.length)}
-              className="absolute right-0 top-1/2 transform -translate-y-1/2 bg-gray-500 text-white p-2 rounded"
-            >
-              →
-            </button>
-          </div>
-        </div>
-      )}
+    <div className="carousel-container">
+      <div className="carousel-buttons">
+        {slides.map((slide, index) => (
+          <button key={index} onClick={() => setSelectedSlide(index)}>
+            {slide.title}
+          </button>
+        ))}
+      </div>
+      <div className="carousel-content">{slides[selectedSlide].content}</div>
     </div>
   );
 };
