@@ -3,9 +3,9 @@ import { ethers } from 'ethers';
 import abi from '../abi/SimpleSwapABI.json'; // Asegurate de tener este ABI exportado correctamente
 import './SimpleSwap.css';
 
-const contractAddress = 'TU_DIRECCION_CONTRATO'; // Reemplazá con tu dirección real del contrato
-const tokenA = 'DIRECCION_TOKEN_A'; // Reemplazá con la dirección real de tokenA
-const tokenB = 'DIRECCION_TOKEN_B'; // Reemplazá con la dirección real de tokenB
+const contractAddress = '0x371992a4D1BaC196b85D1C45A2C77CA15e399eE6'; // Reemplazá con tu dirección real del contrato
+const tokenA = '0x03c4dac47eec187c5dc2b333c0743c6ef8a84afa'; // Reemplazá con la dirección real de tokenA
+const tokenB = '0x1e44dfac24406060acb91b6650768bfb577f7bd2'; // Reemplazá con la dirección real de tokenB
 
 const SimpleSwap = ({ account }) => {
   const [amountA, setAmountA] = useState('');
