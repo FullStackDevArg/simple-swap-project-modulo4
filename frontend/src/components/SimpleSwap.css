@@ -1,0 +1,30 @@
+.carousel-container {
+  padding: 2rem;
+  text-align: center;
+}
+
+.carousel-buttons {
+  margin-bottom: 1rem;
+}
+
+.carousel-buttons button {
+  margin: 0 0.5rem;
+  padding: 0.5rem 1rem;
+  cursor: pointer;
+  background-color: #222;
+  color: white;
+  border: none;
+  border-radius: 4px;
+}
+
+.carousel-content input {
+  display: block;
+  margin: 0.5rem auto;
+  padding: 0.5rem;
+  width: 200px;
+}
+
+.carousel-content button {
+  margin-top: 1rem;
+  padding: 0.5rem 1rem;
+}
