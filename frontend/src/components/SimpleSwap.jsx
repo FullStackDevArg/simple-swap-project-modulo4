@@ -1,23 +1,37 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { ethers } from 'ethers';
-import abi from '../abi/SimpleSwapABI.json'; // Asegurate de tener este ABI exportado correctamente
+import abi from '../abi/SimpleSwapABI.json'; // Asegurate de tener el ABI correcto
 import './SimpleSwap.css';
 
-const contractAddress = '0x371992a4D1BaC196b85D1C45A2C77CA15e399eE6'; // Reemplazá con tu dirección real del contrato
-const tokenA = '0x03c4dac47eec187c5dc2b333c0743c6ef8a84afa'; // Reemplazá con la dirección real de tokenA
-const tokenB = '0x1e44dfac24406060acb91b6650768bfb577f7bd2'; // Reemplazá con la dirección real de tokenB
+const contractAddress = '0x371992a4D1BaC196b85D1C45A2C77CA15e399eE6'; // Dirección de tu contrato desplegado
+const tokenA = '0x03c4dac47eec187c5dc2b333c0743c6ef8a84afa';
+const tokenB = '0x1e44dfac24406060acb91b6650768bfb577f7bd2';
 
 const SimpleSwap = ({ account }) => {
   const [amountA, setAmountA] = useState('');
   const [amountB, setAmountB] = useState('');
   const [liquidity, setLiquidity] = useState('');
   const [selectedSlide, setSelectedSlide] = useState(0);
+  const [contract, setContract] = useState(null);
 
-  const provider = new ethers.BrowserProvider(window.ethereum);
-  const signer = await provider.getSigner();
-  const contract = new ethers.Contract(contractAddress, abi, signer);
+  // Inicializa el contrato al montar el componente
+  useEffect(() => {
+    const initContract = async () => {
+      try {
+        const provider = new ethers.BrowserProvider(window.ethereum);
+        const signer = await provider.getSigner();
+        const instance = new ethers.Contract(contractAddress, abi, signer);
+        setContract(instance);
+      } catch (error) {
+        console.error('Error al inicializar el contrato:', error);
+      }
+    };
+
+    initContract();
+  }, []);
 
   const addLiquidity = async () => {
+    if (!contract) return;
     try {
       const tx = await contract.addLiquidity(
         tokenA,
@@ -38,6 +52,7 @@ const SimpleSwap = ({ account }) => {
   };
 
   const removeLiquidity = async () => {
+    if (!contract) return;
     try {
       const tx = await contract.removeLiquidity(
         tokenA,
@@ -57,6 +72,7 @@ const SimpleSwap = ({ account }) => {
   };
 
   const swapTokens = async () => {
+    if (!contract) return;
     try {
       const tx = await contract.swapExactTokensForTokens(
         ethers.parseUnits(amountA, 18),
@@ -74,6 +90,7 @@ const SimpleSwap = ({ account }) => {
   };
 
   const getPrice = async () => {
+    if (!contract) return;
     try {
       const price = await contract.getPrice(tokenA, tokenB);
       alert(`Price: ${ethers.formatEther(price)}`);
