@@ -29,12 +29,16 @@ const SimpleSwap = ({ account }) => {
     initContract();
   }, []);
 
-  const addLiquidity = async () => {
-    if (!contract) return;
+  const checkAccount = () => {
     if (!account) {
-      alert("Please connect your wallet");
-      return;
+      alert('Please connect your wallet');
+      return false;
     }
+    return true;
+  };
+
+  const addLiquidity = async () => {
+    if (!contract || !checkAccount()) return;
     try {
       const tx = await contract.addLiquidity(
         tokenA,
@@ -55,11 +59,7 @@ const SimpleSwap = ({ account }) => {
   };
 
   const removeLiquidity = async () => {
-    if (!contract) return;
-    if (!account) {
-      alert("Please connect your wallet");
-      return;
-    }
+    if (!contract || !checkAccount()) return;
     try {
       const tx = await contract.removeLiquidity(
         tokenA,
@@ -79,11 +79,7 @@ const SimpleSwap = ({ account }) => {
   };
 
   const swapTokens = async () => {
-    if (!contract) return;
-    if (!account) {
-      alert("Please connect your wallet");
-      return;
-    }
+    if (!contract || !checkAccount()) return;
     try {
       const tx = await contract.swapExactTokensForTokens(
         ethers.parseUnits(amountA, 18),
@@ -102,10 +98,6 @@ const SimpleSwap = ({ account }) => {
 
   const getPrice = async () => {
     if (!contract) return;
-    if (!account) {
-      alert("Please connect your wallet");
-      return;
-    }
     try {
       const price = await contract.getPrice(tokenA, tokenB);
       alert(`Price: ${ethers.formatEther(price)}`);
