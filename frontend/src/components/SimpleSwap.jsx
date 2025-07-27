@@ -8,11 +8,10 @@ function SimpleSwap() {
   const [amountA, setAmountA] = useState('');
   const [amountB, setAmountB] = useState('');
 
-  // 🔐 Dirección del contrato y tokens en Sepolia (ejemplo)
+  // 🔐 Dirección del contrato y tokens en Sepolia
   const contractAddress = '0x371992a4D1BaC196b85D1C45A2C77CA15e399eE6';
   const tokenA = '0x03c4dac47eec187c5dc2b333c0743c6ef8a84afa';
   const tokenB = '0x1e44dfac24406060acb91b6650768bfb577f7bd2';
-
 
   const tokenAbi = [
     'function approve(address spender, uint256 amount) external returns (bool)',
@@ -101,6 +100,63 @@ function SimpleSwap() {
     }
   };
 
+  const getPrice = async () => {
+    try {
+      const provider = new ethers.BrowserProvider(window.ethereum);
+      const contract = new ethers.Contract(contractAddress, swapAbi, provider);
+      const price = await contract.getPrice(tokenA, tokenB);
+      setError(`Precio actual Token A → B: ${ethers.formatEther(price)} B por A`);
+    } catch (err) {
+      setError('Error al obtener precio: ' + err.message);
+    }
+  };
+
+  const swapTokens = async () => {
+    try {
+      if (!account) return setError('Por favor, conecta tu billetera');
+      if (!amountA) return setError('Ingresa cantidad de Token A para intercambiar');
+
+      const provider = new ethers.BrowserProvider(window.ethereum);
+      const signer = await provider.getSigner();
+      const contract = new ethers.Contract(contractAddress, swapAbi, signer);
+
+      const amountIn = ethers.parseEther(amountA);
+      const amountOutMin = ethers.parseEther('0');
+      const path = [tokenA, tokenB];
+      const deadline = Math.floor(Date.now() / 1000) + 600;
+
+      const tx = await contract.swapExactTokensForTokens(amountIn, amountOutMin, path, account, deadline);
+      const receipt = await tx.wait();
+      setTxHash(receipt.transactionHash);
+      setError(null);
+    } catch (err) {
+      setError('Error al hacer swap: ' + err.message);
+    }
+  };
+
+  const removeLiquidity = async () => {
+    try {
+      if (!account) return setError('Por favor, conecta tu billetera');
+
+      const provider = new ethers.BrowserProvider(window.ethereum);
+      const signer = await provider.getSigner();
+      const contract = new ethers.Contract(contractAddress, swapAbi, signer);
+
+      const totalLiquidity = await contract.totalLiquidity();
+      const liquidity = totalLiquidity;
+      const amountAMin = ethers.parseEther('0');
+      const amountBMin = ethers.parseEther('0');
+      const deadline = Math.floor(Date.now() / 1000) + 600;
+
+      const tx = await contract.removeLiquidity(tokenA, tokenB, liquidity, amountAMin, amountBMin, account, deadline);
+      const receipt = await tx.wait();
+      setTxHash(receipt.transactionHash);
+      setError(null);
+    } catch (err) {
+      setError('Error al retirar liquidez: ' + err.message);
+    }
+  };
+
   return (
     <div className="p-6 bg-white rounded-lg shadow-lg max-w-md mx-auto mt-10">
       <h1 className="text-2xl font-bold mb-4">SimpleSwap</h1>
@@ -144,10 +200,28 @@ function SimpleSwap() {
             Aprobar Tokens
           </button>
           <button
-            className="w-full bg-green-500 text-white py-2 px-4 rounded hover:bg-green-600"
+            className="w-full bg-green-500 text-white py-2 px-4 rounded hover:bg-green-600 mb-2"
             onClick={addLiquidity}
           >
             Añadir Liquidez
+          </button>
+          <button
+            className="w-full bg-indigo-500 text-white py-2 px-4 rounded hover:bg-indigo-600 mb-2"
+            onClick={getPrice}
+          >
+            Consultar Precio
+          </button>
+          <button
+            className="w-full bg-purple-500 text-white py-2 px-4 rounded hover:bg-purple-600 mb-2"
+            onClick={swapTokens}
+          >
+            Intercambiar Tokens
+          </button>
+          <button
+            className="w-full bg-red-500 text-white py-2 px-4 rounded hover:bg-red-600"
+            onClick={removeLiquidity}
+          >
+            Retirar Liquidez
           </button>
         </>
       )}

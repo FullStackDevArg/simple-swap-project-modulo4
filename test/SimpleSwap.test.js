@@ -2,178 +2,264 @@ const { expect } = require("chai");
 const { ethers } = require("hardhat");
 
 describe("SimpleSwap", function () {
-  let SimpleSwap, simpleSwap, owner, addr1, tokenA, tokenB;
+  let SimpleSwap, simpleSwap, TokenA, TokenB, tokenA, tokenB, owner, user;
+  const MINIMUM_LIQUIDITY = 1000;
 
   beforeEach(async function () {
-    [owner, addr1] = await ethers.getSigners();
-    const Token = await ethers.getContractFactory("ERC20Mock");
-    tokenA = await Token.deploy("Token A", "TA", ethers.parseEther("1000000"));
-    tokenB = await Token.deploy("Token B", "TB", ethers.parseEther("1000000"));
-    await tokenA.waitForDeployment();
-    await tokenB.waitForDeployment();
+    [owner, user] = await ethers.getSigners();
 
-    const SimpleSwap = await ethers.getContractFactory("SimpleSwap");
-    simpleSwap = await SimpleSwap.deploy(await tokenA.getAddress(), await tokenB.getAddress());
-    await simpleSwap.waitForDeployment();
+    // Deploy ERC20 tokens
+    const ERC20 = await ethers.getContractFactory("ERC20PresetMinterPauser");
+    tokenA = await ERC20.deploy("Token A", "TKNA");
+    tokenB = await ERC20.deploy("Token B", "TKNB");
+    await tokenA.deployed();
+    await tokenB.deployed();
 
-    // Aprobar el contrato para gastar tokens
-    await tokenA.approve(await simpleSwap.getAddress(), ethers.MaxUint256);
-    await tokenB.approve(await simpleSwap.getAddress(), ethers.MaxUint256);
-    await tokenA.connect(addr1).approve(await simpleSwap.getAddress(), ethers.MaxUint256);
-    await tokenB.connect(addr1).approve(await simpleSwap.getAddress(), ethers.MaxUint256);
+    // Deploy SimpleSwap
+    SimpleSwap = await ethers.getContractFactory("SimpleSwap");
+    simpleSwap = await SimpleSwap.deploy(tokenA.address, tokenB.address);
+    await simpleSwap.deployed();
+
+    // Mint tokens and approve
+    await tokenA.mint(user.address, ethers.utils.parseEther("10000"));
+    await tokenB.mint(user.address, ethers.utils.parseEther("10000"));
+    await tokenA.connect(user).approve(simpleSwap.address, ethers.constants.MaxUint256);
+    await tokenB.connect(user).approve(simpleSwap.address, ethers.constants.MaxUint256);
   });
 
-  it("Should deploy with correct token addresses", async function () {
-    expect(await simpleSwap.tokenA()).to.equal(await tokenA.getAddress());
-    expect(await simpleSwap.tokenB()).to.equal(await tokenB.getAddress());
-  });
+  describe("addLiquidity", function () {
+    it("Should add initial liquidity correctly", async function () {
+      const amountA = ethers.utils.parseEther("100");
+      const amountB = ethers.utils.parseEther("200");
+      const deadline = Math.floor(Date.now() / 1000) + 3600;
 
-  it("Should add liquidity successfully", async function () {
-    const amountA = ethers.parseEther("1000");
-    const amountB = ethers.parseEther("2000");
-    const deadline = Math.floor(Date.now() / 1000) + 600;
-
-    await tokenA.transfer(owner.address, amountA);
-    await tokenB.transfer(owner.address, amountB);
-
-    const tx = await simpleSwap.addLiquidity(
-      await tokenA.getAddress(),
-      await tokenB.getAddress(),
-      amountA,
-      amountB,
-      0,
-      0,
-      owner.address,
-      deadline
-    );
-    await tx.wait();
-
-    expect(await simpleSwap.reserveA()).to.equal(amountA);
-    expect(await simpleSwap.reserveB()).to.equal(amountB);
-    expect(await simpleSwap.totalLiquidity()).to.be.above(0);
-    expect(await simpleSwap.liquidity(owner.address)).to.be.above(0);
-  });
-
-  it("Should fail to add liquidity with invalid deadline", async function () {
-    const amountA = ethers.parseEther("1000");
-    const amountB = ethers.parseEther("2000");
-    const deadline = Math.floor(Date.now() / 1000) - 60; // Deadline pasado
-
-    await expect(
-      simpleSwap.addLiquidity(
-        await tokenA.getAddress(),
-        await tokenB.getAddress(),
+      await expect(simpleSwap.connect(user).addLiquidity(
+        tokenA.address,
+        tokenB.address,
         amountA,
         amountB,
         0,
         0,
-        owner.address,
+        user.address,
         deadline
-      )
-    ).to.be.revertedWith("Deadline reached");
-  });
+      ))
+        .to.emit(simpleSwap, "LiquidityAdded")
+        .withArgs(user.address, amountA, amountB, amountA);
 
-  it("Should remove liquidity successfully", async function () {
-    const amountA = ethers.parseEther("1000");
-    const amountB = ethers.parseEther("2000");
-    const deadline = Math.floor(Date.now() / 1000) + 600;
+      expect(await simpleSwap.reserveA()).to.equal(amountA);
+      expect(await simpleSwap.reserveB()).to.equal(amountB);
+      expect(await simpleSwap.liquidityBalance(user.address)).to.equal(amountA);
+    });
 
-    await tokenA.transfer(owner.address, amountA);
-    await tokenB.transfer(owner.address, amountB);
-    await simpleSwap.addLiquidity(
-      await tokenA.getAddress(),
-      await tokenB.getAddress(),
-      amountA,
-      amountB,
-      0,
-      0,
-      owner.address,
-      deadline
-    );
-
-    const liquidityAmount = await simpleSwap.liquidity(owner.address);
-    const tx = await simpleSwap.removeLiquidity(
-      await tokenA.getAddress(),
-      await tokenB.getAddress(),
-      liquidityAmount,
-      0,
-      0,
-      owner.address,
-      deadline
-    );
-    await tx.wait();
-
-    expect(await simpleSwap.reserveA()).to.equal(0);
-    expect(await simpleSwap.reserveB()).to.equal(0);
-    expect(await simpleSwap.totalLiquidity()).to.equal(0);
-  });
-
-  it("Should fail to remove liquidity with insufficient balance", async function () {
-    const deadline = Math.floor(Date.now() / 1000) + 600;
-    await expect(
-      simpleSwap.removeLiquidity(
-        await tokenA.getAddress(),
-        await tokenB.getAddress(),
-        ethers.parseEther("1"),
+    it("Should add subsequent liquidity proportionally", async function () {
+      await simpleSwap.connect(user).addLiquidity(
+        tokenA.address,
+        tokenB.address,
+        ethers.utils.parseEther("100"),
+        ethers.utils.parseEther("200"),
         0,
         0,
-        owner.address,
+        user.address,
+        Math.floor(Date.now() / 1000) + 3600
+      );
+
+      const amountA = ethers.utils.parseEther("50");
+      const amountB = ethers.utils.parseEther("100"); // 100 = 50 * 200 / 100
+      const deadline = Math.floor(Date.now() / 1000) + 3600;
+
+      await expect(simpleSwap.connect(user).addLiquidity(
+        tokenA.address,
+        tokenB.address,
+        amountA,
+        amountB,
+        0,
+        0,
+        user.address,
         deadline
-      )
-    ).to.be.revertedWith("Insufficient liquidity");
+      ))
+        .to.emit(simpleSwap, "LiquidityAdded")
+        .withArgs(user.address, amountA, amountB, ethers.utils.parseEther("50"));
+
+      expect(await simpleSwap.reserveA()).to.equal(ethers.utils.parseEther("150"));
+      expect(await simpleSwap.reserveB()).to.equal(ethers.utils.parseEther("300"));
+    });
+
+    it("Should revert if deadline expired", async function () {
+      await expect(simpleSwap.connect(user).addLiquidity(
+        tokenA.address,
+        tokenB.address,
+        ethers.utils.parseEther("100"),
+        ethers.utils.parseEther("200"),
+        0,
+        0,
+        user.address,
+        Math.floor(Date.now() / 1000) - 3600
+      )).to.be.revertedWith("Deadline expired");
+    });
+
+    it("Should revert if amounts are zero", async function () {
+      await expect(simpleSwap.connect(user).addLiquidity(
+        tokenA.address,
+        tokenB.address,
+        0,
+        ethers.utils.parseEther("200"),
+        0,
+        0,
+        user.address,
+        Math.floor(Date.now() / 1000) + 3600
+      )).to.be.revertedWith("Invalid amounts");
+    });
+
+    it("Should revert if tokens are invalid", async function () {
+      await expect(simpleSwap.connect(user).addLiquidity(
+        ethers.constants.AddressZero,
+        tokenB.address,
+        ethers.utils.parseEther("100"),
+        ethers.utils.parseEther("200"),
+        0,
+        0,
+        user.address,
+        Math.floor(Date.now() / 1000) + 3600
+      )).to.be.revertedWith("Invalid tokens");
+    });
+
+    it("Should revert if recipient is zero address", async function () {
+      await expect(simpleSwap.connect(user).addLiquidity(
+        tokenA.address,
+        tokenB.address,
+        ethers.utils.parseEther("100"),
+        ethers.utils.parseEther("200"),
+        0,
+        0,
+        ethers.constants.AddressZero,
+        Math.floor(Date.now() / 1000) + 3600
+      )).to.be.revertedWith("Invalid recipient");
+    });
+
+    it("Should revert if liquidity minted is below minimum", async function () {
+      await simpleSwap.connect(user).addLiquidity(
+        tokenA.address,
+        tokenB.address,
+        ethers.utils.parseEther("100"),
+        ethers.utils.parseEther("200"),
+        0,
+        0,
+        user.address,
+        Math.floor(Date.now() / 1000) + 3600
+      );
+
+      await expect(simpleSwap.connect(user).addLiquidity(
+        tokenA.address,
+        tokenB.address,
+        ethers.utils.parseEther("0.0001"),
+        ethers.utils.parseEther("0.0002"),
+        0,
+        0,
+        user.address,
+        Math.floor(Date.now() / 1000) + 3600
+      )).to.be.revertedWith("Insufficient liquidity minted");
+    });
   });
 
-  it("Should swap tokens successfully", async function () {
-    const amountA = ethers.parseEther("1000");
-    const amountB = ethers.parseEther("2000");
-    const deadline = Math.floor(Date.now() / 1000) + 600;
+  describe("swap", function () {
+    beforeEach(async function () {
+      await simpleSwap.connect(user).addLiquidity(
+        tokenA.address,
+        tokenB.address,
+        ethers.utils.parseEther("100"),
+        ethers.utils.parseEther("200"),
+        0,
+        0,
+        user.address,
+        Math.floor(Date.now() / 1000) + 3600
+      );
+    });
 
-    await tokenA.transfer(owner.address, amountA);
-    await tokenB.transfer(owner.address, amountB);
-    await simpleSwap.addLiquidity(
-      await tokenA.getAddress(),
-      await tokenB.getAddress(),
-      amountA,
-      amountB,
-      0,
-      0,
-      owner.address,
-      deadline
-    );
+    it("Should swap tokenA for tokenB correctly", async function () {
+      const amountIn = ethers.utils.parseEther("10");
+      const reserveOut = ethers.utils.parseEther("200");
+      const reserveIn = ethers.utils.parseEther("100");
+      const amountInWithFee = amountIn.mul(997);
+      const expectedOut = reserveOut.mul(amountInWithFee).div(reserveIn.mul(1000).add(amountInWithFee));
 
-    const amountIn = ethers.parseEther("100");
-    const initialBalance = await tokenB.balanceOf(owner.address);
-    await simpleSwap.swapExactTokensForTokens(
-      amountIn,
-      0,
-      [await tokenA.getAddress(), await tokenB.getAddress()],
-      owner.address,
-      deadline
-    );
+      await expect(simpleSwap.connect(user).swap(tokenA.address, amountIn))
+        .to.emit(simpleSwap, "Swap")
+        .withArgs(user.address, tokenA.address, amountIn, expectedOut);
 
-    const finalBalance = await tokenB.balanceOf(owner.address);
-    expect(finalBalance).to.be.above(initialBalance);
+      expect(await simpleSwap.reserveA()).to.equal(reserveIn.add(amountIn));
+      expect(await simpleSwap.reserveB()).to.equal(reserveOut.sub(expectedOut));
+    });
+
+    it("Should swap tokenB for tokenA correctly", async function () {
+      const amountIn = ethers.utils.parseEther("20");
+      const reserveOut = ethers.utils.parseEther("100");
+      const reserveIn = ethers.utils.parseEther("200");
+      const amountInWithFee = amountIn.mul(997);
+      const expectedOut = reserveOut.mul(amountInWithFee).div(reserveIn.mul(1000).add(amountInWithFee));
+
+      await expect(simpleSwap.connect(user).swap(tokenB.address, amountIn))
+        .to.emit(simpleSwap, "Swap")
+        .withArgs(user.address, tokenB.address, amountIn, expectedOut);
+
+      expect(await simpleSwap.reserveB()).to.equal(reserveIn.add(amountIn));
+      expect(await simpleSwap.reserveA()).to.equal(reserveOut.sub(expectedOut));
+    });
+
+    it("Should revert if amountIn is zero", async function () {
+      await expect(simpleSwap.connect(user).swap(tokenA.address, 0))
+        .to.be.revertedWith("Invalid input amount");
+    });
+
+    it("Should revert if tokenIn is invalid", async function () {
+      await expect(simpleSwap.connect(user).swap(ethers.constants.AddressZero, ethers.utils.parseEther("10")))
+        .to.be.revertedWith("Invalid token");
+    });
+
+    it("Should revert if output amount is zero", async function () {
+      await simpleSwap.connect(user).addLiquidity(
+        tokenA.address,
+        tokenB.address,
+        ethers.utils.parseEther("100"),
+        ethers.utils.parseEther("0.0001"),
+        0,
+        0,
+        user.address,
+        Math.floor(Date.now() / 1000) + 3600
+      );
+
+      await expect(simpleSwap.connect(user).swap(tokenA.address, ethers.utils.parseEther("100")))
+        .to.be.revertedWith("Insufficient output amount");
+    });
   });
 
-  it("Should get price correctly", async function () {
-    const amountA = ethers.parseEther("1000");
-    const amountB = ethers.parseEther("2000");
-    const deadline = Math.floor(Date.now() / 1000) + 600;
+  describe("Price functions", function () {
+    beforeEach(async function () {
+      await simpleSwap.connect(user).addLiquidity(
+        tokenA.address,
+        tokenB.address,
+        ethers.utils.parseEther("100"),
+        ethers.utils.parseEther("200"),
+        0,
+        0,
+        user.address,
+        Math.floor(Date.now() / 1000) + 3600
+      );
+    });
 
-    await tokenA.transfer(owner.address, amountA);
-    await tokenB.transfer(owner.address, amountB);
-    await simpleSwap.addLiquidity(
-      await tokenA.getAddress(),
-      await tokenB.getAddress(),
-      amountA,
-      amountB,
-      0,
-      0,
-      owner.address,
-      deadline
-    );
+    it("Should return correct price for tokenA to tokenB", async function () {
+      const price = await simpleSwap.getPriceAtoB();
+      expect(price).to.equal(ethers.utils.parseEther("2")); // 200 / 100 = 2
+    });
 
-    const price = await simpleSwap.getPrice(await tokenA.getAddress(), await tokenB.getAddress());
-    expect(price).to.be.closeTo(ethers.parseEther("2"), ethers.parseEther("0.01")); // 2000/1000 = 2
+    it("Should return correct price for tokenB to tokenA", async function () {
+      const price = await simpleSwap.getPriceBtoA();
+      expect(price).to.equal(ethers.utils.parseEther("0.5")); // 100 / 200 = 0.5
+    });
+
+    it("Should revert if no liquidity", async function () {
+      const newSwap = await SimpleSwap.deploy(tokenA.address, tokenB.address);
+      await newSwap.deployed();
+      await expect(newSwap.getPriceAtoB()).to.be.revertedWith("No liquidity");
+    });
   });
 });
